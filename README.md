@@ -824,7 +824,683 @@ chmod +x generate-coverage-report.sh
 ./generate-coverage-report.sh
 ```
 
+## Statement Testing
 
+**AuthControllerTests.cs**
+
+```cs
+public class AuthControllerTests
+{
+    private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
+    private readonly Mock<IJwtService> _jwtServiceMock;
+    private readonly AuthController _controller;
+
+    public AuthControllerTests()
+    {
+        var store = new Mock<IUserStore<ApplicationUser>>();
+        _userManagerMock = new Mock<UserManager<ApplicationUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        _jwtServiceMock = new Mock<IJwtService>();
+        _controller = new AuthController(_userManagerMock.Object, _jwtServiceMock.Object);
+    }
+
+    [Fact]
+    public async Task Login_ReturnsOk_WhenCredentialsAreValid()
+    {
+        // Arrange
+        var user = new ApplicationUser { Id = "user123", Email = "test@example.com", UserName = "test@example.com" };
+        var loginDto = new LoginDto { Email = "test@example.com", Password = "password123" };
+
+        _userManagerMock.Setup(x => x.FindByEmailAsync(loginDto.Email)).ReturnsAsync(user);
+        _userManagerMock.Setup(x => x.CheckPasswordAsync(user, loginDto.Password)).ReturnsAsync(true);
+        _jwtServiceMock.Setup(x => x.GenerateToken(user.Id)).Returns("test-token");
+
+        // Act
+        var result = await _controller.Login(loginDto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<AuthResponseDto>(okResult.Value);
+        Assert.Equal("test-token", response.Token);
+    }
+
+    [Fact]
+    public async Task Login_ReturnsUnauthorized_WhenUserNotFound()
+    {
+        // Arrange
+        var loginDto = new LoginDto { Email = "wrong@example.com", Password = "password123" };
+        _userManagerMock.Setup(x => x.FindByEmailAsync(loginDto.Email)).ReturnsAsync((ApplicationUser?)null);
+
+        // Act
+        var result = await _controller.Login(loginDto);
+
+        // Assert
+        var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Equal("Invalid credentials", unauthorizedResult.Value);
+    }
+
+    [Fact]
+    public async Task Login_ReturnsUnauthorized_WhenPasswordIsWrong()
+    {
+        // Arrange
+        var user = new ApplicationUser { Id = "user123", Email = "test@example.com", UserName = "test@example.com" };
+        var loginDto = new LoginDto { Email = "test@example.com", Password = "wrong-password" };
+
+        _userManagerMock.Setup(x => x.FindByEmailAsync(loginDto.Email)).ReturnsAsync(user);
+        _userManagerMock.Setup(x => x.CheckPasswordAsync(user, loginDto.Password)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.Login(loginDto);
+
+        // Assert
+        var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Equal("Invalid credentials", unauthorizedResult.Value);
+    }
+
+    [Fact]
+    public async Task Register_ReturnsOk_WhenRegistrationSucceeds()
+    {
+        // Arrange
+        var registerDto = new RegisterDto { Email = "test@example.com", Password = "password123" };
+        var user = new ApplicationUser { Id = "new-user-123", Email = registerDto.Email, UserName = registerDto.Email };
+
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<ApplicationUser>(), registerDto.Password))
+                       .ReturnsAsync(IdentityResult.Success)
+                       .Callback<ApplicationUser, string>((u, p) => u.Id = user.Id);
+        _jwtServiceMock.Setup(x => x.GenerateToken(It.IsAny<string>())).Returns("new-token");
+
+        // Act
+        var result = await _controller.Register(registerDto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<AuthResponseDto>(okResult.Value);
+        Assert.Equal("new-token", response.Token);
+    }
+
+    [Fact]
+    public async Task Register_ReturnsBadRequest_WhenRegistrationFails()
+    {
+        // Arrange
+        var registerDto = new RegisterDto { Email = "test@example.com", Password = "weak" };
+        var errors = new[] {
+            new IdentityError { Code = "PasswordTooShort", Description = "Password is too short" },
+            new IdentityError { Code = "InvalidEmail", Description = "Email is invalid" }
+        };
+
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<ApplicationUser>(), registerDto.Password))
+                       .ReturnsAsync(IdentityResult.Failed(errors));
+
+        // Act
+        var result = await _controller.Register(registerDto);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        var returnedErrors = Assert.IsAssignableFrom<IEnumerable<IdentityError>>(badRequestResult.Value);
+        Assert.Equal(2, returnedErrors.Count());
+    }
+
+    [Fact]
+    public async Task Register_ReturnsBadRequest_WhenUserAlreadyExists()
+    {
+        // Arrange
+        var registerDto = new RegisterDto { Email = "existing@example.com", Password = "password123" };
+        var error = new IdentityError { Code = "DuplicateUserName", Description = "Username already exists" };
+
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<ApplicationUser>(), registerDto.Password))
+                       .ReturnsAsync(IdentityResult.Failed(error));
+
+        // Act
+        var result = await _controller.Register(registerDto);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        var returnedErrors = Assert.IsAssignableFrom<IEnumerable<IdentityError>>(badRequestResult.Value);
+        Assert.Single(returnedErrors);
+        Assert.Equal("DuplicateUserName", returnedErrors.First().Code);
+    }
+}
+```
+
+**AuthorsControllerTests.cs**
+
+```cs
+public class AuthorsControllerTests : IDisposable
+{
+    private readonly ApplicationDbContext _context;
+    private readonly AuthorsController _controller;
+
+    public AuthorsControllerTests()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        _context = new ApplicationDbContext(options);
+        _controller = new AuthorsController(_context);
+    }
+
+    // Test data as property
+    private static List<Author> SampleAuthors => new()
+    {
+        new Author { Id = 1, Name = "Author One" },
+        new Author { Id = 2, Name = "Author Two" },
+        new Author { Id = 3, Name = "Author Three" }
+    };
+
+    [Fact]
+    public async Task GetAuthors_ReturnsAllAuthors_WhenNoQueryProvided()
+    {
+        // Arrange
+        var authors = SampleAuthors.Take(2);
+        _context.Authors.AddRange(authors);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetAuthors(null);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Author>>>(result);
+        var returnValue = Assert.IsType<List<Author>>(actionResult.Value);
+        Assert.Equal(2, returnValue.Count);
+    }
+
+    [Fact]
+    public async Task GetAuthors_ReturnsFilteredAuthors_WhenQueryProvided()
+    {
+        // Arrange
+        var authors = SampleAuthors.Take(3);
+
+        _context.Authors.AddRange(authors);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetAuthors("One");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Author>>>(result);
+        var returnValue = Assert.IsType<List<Author>>(actionResult.Value);
+        Assert.Single(returnValue);
+        Assert.Equal("Author One", returnValue.First().Name);
+    }
+
+    [Fact]
+    public async Task GetAuthor_ReturnsAuthor_WhenAuthorExists()
+    {
+        // Arrange
+        var author = SampleAuthors.Take(1);
+
+        _context.Authors.AddRange(author);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetAuthor(1);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Author>>(result);
+        var returnValue = Assert.IsType<Author>(actionResult.Value);
+        Assert.Equal("Author One", returnValue.Name);
+    }
+
+    [Fact]
+    public async Task GetAuthor_ReturnsNotFound_WhenAuthorDoesNotExists()
+    {
+        // Arrange
+        var author = SampleAuthors.Take(1);
+
+        _context.Authors.AddRange(author);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetAuthor(999);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Author>>(result);
+        Assert.IsType<NotFoundResult>(actionResult.Result);
+    }
+
+    [Fact]
+    public async Task PostAuthor_ReturnsCreatedAtAction_WhenAuthorIsValid()
+    {
+        // Arrange
+        var author = new Author { Name = "New Author" };
+
+        // Act
+        var result = await _controller.PostAuthor(author);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Author>>(result);
+        var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(actionResult.Result);
+        var returnValue = Assert.IsType<Author>(createdAtActionResult.Value);
+
+        Assert.Equal("GetAuthor", createdAtActionResult.ActionName);
+        Assert.Equal("New Author", returnValue.Name);
+        Assert.True(returnValue.Id > 0);
+    }
+
+    [Fact]
+    public async Task PutAuthor_ReturnsBadRequest_WhenIdDoesNotMatchAuthorId()
+    {
+        // Arrange
+        var author = new Author { Id = 2, Name = "Test Author" };
+
+        // Act - ID in URL (1) doesn't match author.Id (2)
+        var result = await _controller.PutAuthor(1, author);
+
+        // Assert
+        Assert.IsType<BadRequestResult>(result);
+    }
+
+    [Fact]
+    public async Task PutAuthor_ReturnsNotFound_WhenAuthorDoesNotExist()
+    {
+        // Arrange
+        var nonExistentAuthor = new Author { Id = 999, Name = "Non-existent Author" };
+
+        // Act
+        var result = await _controller.PutAuthor(999, nonExistentAuthor);
+
+        // Assert
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task PutAuthor_UpdatesExistingAuthor_WhenValidDataProvided()
+    {
+        // Arrange
+        var existingAuthor = new Author { Id = 1, Name = "Original Name" };
+        _context.Authors.Add(existingAuthor);
+        await _context.SaveChangesAsync();
+
+        // Clear tracking to simulate fresh request
+        _context.ChangeTracker.Clear();
+
+        var updatedAuthor = new Author { Id = 1, Name = "Updated Name" };
+
+        // Act
+        var result = await _controller.PutAuthor(1, updatedAuthor);
+
+        // Assert
+        Assert.IsType<NoContentResult>(result);
+
+        // Verify database was updated
+        var authorFromDb = await _context.Authors.AsNoTracking().FirstOrDefaultAsync(a => a.Id == 1);
+        Assert.NotNull(authorFromDb);
+        Assert.Equal("Updated Name", authorFromDb.Name);
+    }
+
+    [Fact]
+    public async Task DeleteAuthor_ReturnsNoContent_WhenAuthorExists()
+    {
+        // Arrange
+        var existingAuthor = new Author { Id = 1, Name = "Author to Delete" };
+        _context.Authors.Add(existingAuthor);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.DeleteAuthor(1);
+
+        // Assert
+        Assert.IsType<NoContentResult>(result);
+
+        // Verify the author was actually deleted
+        var authorInDb = await _context.Authors.FindAsync(1);
+        Assert.Null(authorInDb);
+    }
+
+    [Fact]
+    public async Task DeleteAuthor_ReturnsNotFound_WhenAuthorDoesNotExist()
+    {
+        // Act
+        var result = await _controller.DeleteAuthor(999);
+
+        // Assert
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    public void Dispose()
+    {
+        // Clean up resources
+        _context.Dispose();
+    }
+}
+```
+
+**BooksControllerTests.cs**
+
+```cs
+public class BooksControllerTests : IDisposable
+{
+    private readonly ApplicationDbContext _context;
+    private readonly BooksController _controller;
+
+    public BooksControllerTests()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        _context = new ApplicationDbContext(options);
+        _controller = new BooksController(_context);
+    }
+
+    // Test data as property
+    private static List<Book> SampleBooks => new()
+    {
+        new Book { Id = 1, Title = "The Great Gatsby" },
+        new Book { Id = 2, Title = "To Kill a Mockingbird" },
+        new Book { Id = 3, Title = "1984" },
+        new Book { Id = 4, Title = "The Catcher in the Rye" }
+    };
+
+    public void Dispose()
+    {
+        _context.Dispose();
+    }
+
+    #region GetBooks Tests
+
+    [Fact]
+    public async Task GetBooks_ReturnsAllBooks_WhenNoQueryProvided()
+    {
+        // Arrange
+        var books = SampleBooks.Take(3).ToList();
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks(null);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Equal(3, returnValue.Count);
+    }
+
+    [Fact]
+    public async Task GetBooks_ReturnsAllBooks_WhenEmptyQueryProvided()
+    {
+        // Arrange
+        var books = SampleBooks.Take(2).ToList();
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks("");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Equal(2, returnValue.Count);
+    }
+
+    [Fact]
+    public async Task GetBooks_ReturnsFilteredBooks_WhenQueryProvided()
+    {
+        // Arrange
+        var books = SampleBooks.ToList();
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks("The");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Equal(2, returnValue.Count); // "The Great Gatsby" and "The Catcher in the Rye"
+        Assert.All(returnValue, book => Assert.Contains("The", book.Title));
+    }
+
+    [Fact]
+    public async Task GetBooks_ReturnsEmptyList_WhenQueryNotFound()
+    {
+        // Arrange
+        var books = SampleBooks.Take(2).ToList();
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks("NonExistentBook");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Empty(returnValue);
+    }
+
+    [Fact]
+    public async Task GetBooks_ReturnsEmptyList_WhenNoBooksExist()
+    {
+        // Act
+        var result = await _controller.GetBooks(null);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Empty(returnValue);
+    }
+
+    #endregion
+
+    #region GetBook Tests
+
+    [Fact]
+    public async Task GetBook_ReturnsBook_WhenBookExists()
+    {
+        // Arrange
+        var book = SampleBooks.First();
+        _context.Books.Add(book);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBook(1);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Book>>(result);
+        var returnValue = Assert.IsType<Book>(actionResult.Value);
+        Assert.Equal("The Great Gatsby", returnValue.Title);
+        Assert.Equal(1, returnValue.Id);
+    }
+
+    [Fact]
+    public async Task GetBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Act
+        var result = await _controller.GetBook(999);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Book>>(result);
+        Assert.IsType<NotFoundResult>(actionResult.Result);
+    }
+
+    #endregion
+
+    #region PostBook Tests
+
+    [Fact]
+    public async Task PostBook_ReturnsCreatedAtAction_WhenBookIsValid()
+    {
+        // Arrange
+        var newBook = new Book { Title = "New Book Title" };
+
+        // Act
+        var result = await _controller.PostBook(newBook);
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<Book>>(result);
+        var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(actionResult.Result);
+        var returnValue = Assert.IsType<Book>(createdAtActionResult.Value);
+
+        Assert.Equal("GetBook", createdAtActionResult.ActionName);
+        Assert.Equal("New Book Title", returnValue.Title);
+        Assert.True(returnValue.Id > 0);
+
+        // Verify book was saved to database
+        var bookInDb = await _context.Books.FindAsync(returnValue.Id);
+        Assert.NotNull(bookInDb);
+        Assert.Equal("New Book Title", bookInDb.Title);
+    }
+
+    #endregion
+
+    #region PutBook Tests
+
+    [Fact]
+    public async Task PutBook_ReturnsNoContent_WhenUpdateIsSuccessful()
+    {
+        // Arrange
+        var existingBook = new Book { Id = 1, Title = "Original Title" };
+        _context.Books.Add(existingBook);
+        await _context.SaveChangesAsync();
+
+        // Clear tracking to simulate fresh request
+        _context.ChangeTracker.Clear();
+
+        var updatedBook = new Book { Id = 1, Title = "Updated Title" };
+
+        // Act
+        var result = await _controller.PutBook(1, updatedBook);
+
+        // Assert
+        Assert.IsType<NoContentResult>(result);
+
+        // Verify the book was actually updated
+        var bookFromDb = await _context.Books.AsNoTracking().FirstOrDefaultAsync(b => b.Id == 1);
+        Assert.NotNull(bookFromDb);
+        Assert.Equal("Updated Title", bookFromDb.Title);
+    }
+
+    [Fact]
+    public async Task PutBook_ReturnsBadRequest_WhenIdDoesNotMatchBookId()
+    {
+        // Arrange
+        var book = new Book { Id = 2, Title = "Test Book" };
+
+        // Act - ID in URL (1) doesn't match book.Id (2)
+        var result = await _controller.PutBook(1, book);
+
+        // Assert
+        Assert.IsType<BadRequestResult>(result);
+    }
+
+    [Fact]
+    public async Task PutBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Arrange
+        var nonExistentBook = new Book { Id = 999, Title = "Non-existent Book" };
+
+        // Act
+        var result = await _controller.PutBook(999, nonExistentBook);
+
+        // Assert
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    #endregion
+
+    #region DeleteBook Tests
+
+    [Fact]
+    public async Task DeleteBook_ReturnsNoContent_WhenBookExists()
+    {
+        // Arrange
+        var existingBook = new Book { Id = 1, Title = "Book to Delete" };
+        _context.Books.Add(existingBook);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.DeleteBook(1);
+
+        // Assert
+        Assert.IsType<NoContentResult>(result);
+
+        // Verify the book was actually deleted
+        var bookInDb = await _context.Books.FindAsync(1);
+        Assert.Null(bookInDb);
+    }
+
+    [Fact]
+    public async Task DeleteBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Act
+        var result = await _controller.DeleteBook(999);
+
+        // Assert
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteBook_RemovesOnlySpecificBook_WhenMultipleBooksExist()
+    {
+        // Arrange
+        var books = SampleBooks.Take(3).ToList();
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.DeleteBook(2); // Delete "To Kill a Mockingbird"
+
+        // Assert
+        Assert.IsType<NoContentResult>(result);
+
+        // Verify correct book was deleted
+        var remainingBooks = await _context.Books.ToListAsync();
+        Assert.Equal(2, remainingBooks.Count);
+        Assert.Contains(remainingBooks, b => b.Title == "The Great Gatsby");
+        Assert.Contains(remainingBooks, b => b.Title == "1984");
+        Assert.DoesNotContain(remainingBooks, b => b.Title == "To Kill a Mockingbird");
+    }
+
+    #endregion
+
+    #region Edge Cases
+
+    [Fact]
+    public async Task GetBooks_HandlesCaseInsensitiveSearch()
+    {
+        // Arrange
+        var books = new List<Book>
+        {
+            new Book { Id = 1, Title = "The Great Gatsby" },
+            new Book { Id = 2, Title = "the catcher in the rye" }
+        };
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks("the");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Equal(2, returnValue.Count); // Both should match
+    }
+
+    [Fact]
+    public async Task GetBooks_HandlesNullTitle()
+    {
+        // Arrange
+        var books = new List<Book>
+        {
+            new Book { Id = 1, Title = "Valid Title" },
+            new Book { Id = 2, Title = null }
+        };
+        _context.Books.AddRange(books);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _controller.GetBooks("Valid");
+
+        // Assert
+        var actionResult = Assert.IsType<ActionResult<IEnumerable<Book>>>(result);
+        var returnValue = Assert.IsType<List<Book>>(actionResult.Value);
+        Assert.Single(returnValue);
+        Assert.Equal("Valid Title", returnValue.First().Title);
+    }
+
+    #endregion
+}
+```
 
 
 
