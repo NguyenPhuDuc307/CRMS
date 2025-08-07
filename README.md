@@ -427,6 +427,251 @@ if (app.Environment.IsDevelopment())
 dotnet watch run -lp=http
 ```
 
+## Docker
+
+**Dockerfile**
+
+```Dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 80
+EXPOSE 443
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+COPY ["kozy-api.csproj", "./"]
+RUN dotnet restore "kozy-api.csproj"
+COPY . .
+WORKDIR "/src"
+RUN dotnet build "kozy-api.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "kozy-api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+ENTRYPOINT ["dotnet", "kozy-api.dll"]
+```
+
+**docker-compose.yml**
+
+```yml
+services:
+  kozy-api:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    container_name: kozy-api
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=kozy;Username=ducnp;Password=password123
+    depends_on:
+      - postgres
+    networks:
+      - kozy-network
+
+  postgres:
+    image: postgres:15
+    container_name: kozy-postgres
+    environment:
+      POSTGRES_DB: kozy
+      POSTGRES_USER: ducnp
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kozy-network
+
+volumes:
+  postgres_data:
+
+networks:
+  kozy-network:
+    driver: bridge
+```
+
+## CRUDS
+
+**Author.cs**
+
+```cs
+public class Author
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public int BirthYear { get; set; }
+    public string? Nationality { get; set; }
+    public string? Biography { get; set; }
+}
+```
+
+**Book.cs**
+
+```cs
+public class Book
+{
+    public int Id { get; set; }
+    public string? Title { get; set; }
+    public string? Genre { get; set; }
+    public int PublicationYear { get; set; }
+    public string? Synopsis { get; set; }
+    public int AuthorId { get; set; }
+    public Author? Author { get; set; } // Navigation property to Author
+}
+```
+
+**Migrate**
+
+```sh
+dotnet ef migrations add AddAuthorEntityAndBookEntity
+```
+
+```sh
+dotnet ef database update
+```
+
+**ApplicationDbContext.cs**
+
+```cs
+public DbSet<Author> Authors { get; set; }
+public DbSet<Book> Books { get; set; }
+```
+
+**Generate API Controllers**
+
+```sh
+dotnet aspnet-codegenerator controller -name AuthorsController -async -api -m Author -dc ApplicationDbContext -outDir Controllers
+```
+
+```sh
+dotnet aspnet-codegenerator controller -name BooksController -async -api -m Book -dc ApplicationDbContext -outDir Controllers
+```
+
+**REST Client**
+
+```http
+@kozy_api_HostAddress = http://localhost:5230/api
+@token = 
+@authorId = 1
+@bookId = 1
+@q = Author
+
+### 1.1. Register
+POST {{kozy_api_HostAddress}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@deha.vn",
+  "password": "Admin@123"
+}
+
+### 1.2. Login
+POST {{kozy_api_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@deha.vn",
+  "password": "Admin@123"
+}
+
+### 2.1 Get All Authors with Query
+GET {{kozy_api_HostAddress}}/authors?q={{q}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 2.2 Get Author by ID
+GET {{kozy_api_HostAddress}}/authors/{{authorId}}
+Authorization: Bearer {{token}}
+
+### 2.3 Create Author
+POST {{kozy_api_HostAddress}}/authors
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "New Author",
+  "birthYear": 1980,
+  "nationality": "American",
+  "biography": "This is a new author."
+}
+
+### 2.4 Update Author
+PUT {{kozy_api_HostAddress}}/authors/{{authorId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Updated Author",
+  "birthYear": 1985,
+  "nationality": "British",
+  "biography": "This is an updated author."
+}
+
+### 2.5 Delete Author
+DELETE {{kozy_api_HostAddress}}/authors/{{authorId}}
+Authorization: Bearer {{token}}
+
+### 3.1 Get All Books with Query
+GET {{kozy_api_HostAddress}}/books?q={{q}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 3.2 Get Book by ID
+GET {{kozy_api_HostAddress}}/books/{{bookId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 3.3 Create Book
+POST {{kozy_api_HostAddress}}/books
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title": "New Book",
+  "authorId": {{authorId}},
+  "publishedYear": 2020,
+  "genre": "Fiction",
+  "summary": "This is a new book."
+}
+
+### 3.4 Update Book
+PUT {{kozy_api_HostAddress}}/books/{{bookId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title": "Updated Book",
+  "authorId": {{authorId}},
+  "publishedYear": 2021,
+  "genre": "Non-Fiction",
+  "summary": "This is an updated book."
+}
+
+### 3.5 Delete Book
+DELETE {{kozy_api_HostAddress}}/books/{{bookId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
