@@ -783,8 +783,46 @@ public class JwtServiceTests
 }
 ```
 
+## Report Generator
 
+```sh
+dotnet tool install dotnet-reportgenerator-globaltool --tool-path tools
+```
 
+```sh
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+```
+
+**.netconfig**
+
+```netconfig
+[ReportGenerator]
+	reports = "./TestResults/*/coverage.cobertura.xml"
+	targetdir = "./CoverageReport"
+	reporttypes = "Html"
+	title = "Coverage Report"
+	classfilters = "+kozy_api.Controllers.*;+kozy_api.Services.*;-*Tests"
+```
+
+**generate-coverage-report.sh**
+
+```sh
+#!/bin/bash
+
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+reportgenerator
+
+# Open report in browser (macOS)
+if command -v open &> /dev/null; then
+    open ./CoverageReport/index.html
+fi
+```
+
+```sh
+chmod +x generate-coverage-report.sh
+./generate-coverage-report.sh
+```
 
 
 
