@@ -1705,6 +1705,45 @@ dotnet build --no-restore
 dotnet sonarscanner end /d:sonar.token="sqp_c7fd42b17716ff30ad1b0901913a671a8b2e12e5"
 ```
 
+## Frontend - Angular
+
+**Install Angular CLI**
+
+```sh
+npm install -g @angular/cli
+```
+
+**Init Angular Project**
+
+```sh
+ng new kozy-client --routing=true --style=scss --package-manager=npm
+```
+
+**Bootstrap, HTTP client and reactive forms**
+
+```sh
+npm install bootstrap @popperjs/core
+npm install @angular/forms @angular/common
+```
+
+```json
+"styles": [
+  "node_modules/bootstrap/dist/css/bootstrap.min.css",
+  "src/styles.scss"
+],
+"scripts": [
+  "node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"
+]
+```
+
+```sh
+mkdir -p core/guards
+mkdir -p core/interceptors
+mkdir -p core/models
+mkdir -p core/services
+```
+
+
 
 
 
