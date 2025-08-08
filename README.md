@@ -1584,13 +1584,11 @@ dotnet tool install --global dotnet-sonarscanner
 ```sh
 #!/bin/bash
 
-# Remove TestResults directory if it exists
-if [ -d "./TestResults" ]; then
-    rm -rf ./TestResults
-fi
+# Remove any existing results directory to ensure a clean state
+rm -rf ./TestResults
 
 # Run tests with OpenCover format for SonarQube compatibility
-dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
 # Begin SonarQube analysis with OpenCover format
 dotnet sonarscanner begin /k:"kozy-api" \
