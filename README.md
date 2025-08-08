@@ -429,6 +429,84 @@ dotnet watch run -lp=http
 
 ## Docker
 
+**.dockerignore**
+
+```
+# .NET build artifacts
+bin/
+obj/
+out/
+
+# Test results and coverage
+TestResults/
+CoverageReport/
+*.coverage
+*.coveragexml
+
+# SonarQube files
+.sonarqube/
+
+# Development files
+*.Development.json
+appsettings.Development.json
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+
+# IDE files
+.vs/
+.vscode/
+*.sln.docstates
+*.userprefs
+*.pidb
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Scripts and tools
+*.sh
+*.bat
+*.ps1
+
+# Sensitive files
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files (to avoid nested Docker builds)
+Dockerfile*
+docker-compose*
+```
+
 **Dockerfile**
 
 ```Dockerfile
@@ -437,11 +515,27 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
+# Create a non-root user
+RUN addgroup --system --gid 1001 dotnet && \
+    adduser --system --uid 1001 --ingroup dotnet dotnet
+
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+
+# Copy only the project file first for better layer caching
 COPY ["kozy-api.csproj", "./"]
 RUN dotnet restore "kozy-api.csproj"
-COPY . .
+
+# Copy only necessary source files (exclude sensitive data)
+COPY ["Controllers/", "./Controllers/"]
+COPY ["Data/", "./Data/"]
+COPY ["Dtos/", "./Dtos/"]
+COPY ["Models/", "./Models/"]
+COPY ["Services/", "./Services/"]
+COPY ["Properties/", "./Properties/"]
+COPY ["Program.cs", "./"]
+COPY ["appsettings.json", "./"]
+
 WORKDIR "/src"
 RUN dotnet build "kozy-api.csproj" -c Release -o /app/build
 
@@ -450,7 +544,12 @@ RUN dotnet publish "kozy-api.csproj" -c Release -o /app/publish /p:UseAppHost=fa
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+# Change ownership to non-root user
+COPY --from=publish --chown=dotnet:dotnet /app/publish .
+
+# Switch to non-root user
+USER dotnet
 
 ENTRYPOINT ["dotnet", "kozy-api.dll"]
 ```
