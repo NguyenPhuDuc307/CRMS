@@ -1695,7 +1695,7 @@ dotnet sonarscanner begin /k:"kozy-api" \
     /d:sonar.token="sqp_c7fd42b17716ff30ad1b0901913a671a8b2e12e5" \
     /d:sonar.scanner.scanAll=false \
     /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" \
-    /d:sonar.exclusions="**/bin/**,**/obj/**,**/wwwroot/**,**/Migrations/**,**/Program.cs" \
+    /d:sonar.exclusions="**/bin/**,**/obj/**,**/wwwroot/**,**/Migrations/**,**/Program.cs,**/Dockerfile" \
     /d:sonar.test.exclusions="**/bin/**,**/obj/**"
 
 # Build the project
