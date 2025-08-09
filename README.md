@@ -1707,7 +1707,7 @@ dotnet sonarscanner end /d:sonar.token="sqp_c7fd42b17716ff30ad1b0901913a671a8b2e
 
 ## Frontend - Angular
 
-**Install Angular CLI**
+### Install Angular CLI
 
 ```sh
 npm install -g @angular/cli
@@ -1726,6 +1726,8 @@ npm install bootstrap @popperjs/core
 npm install @angular/forms @angular/common
 ```
 
+**angular.json**
+
 ```json
 "styles": [
   "node_modules/bootstrap/dist/css/bootstrap.min.css",
@@ -1736,19 +1738,422 @@ npm install @angular/forms @angular/common
 ]
 ```
 
+### Generate component and service
+
 ```sh
-mkdir -p core/guards
-mkdir -p core/interceptors
-mkdir -p core/models
-mkdir -p core/services
+ng generate component shared/navbar --skip-tests
+ng generate component components/navbar
+ng generate component pages/login --skip-tests
+ng generate component pages/authors --skip-tests
+ng generate component pages/books --skip-tests
+```
+
+
+**app.routes.ts**
+
+```ts
+export const routes: Routes = [
+  { path: '', redirectTo: '/home', pathMatch: 'full' },
+  { path: 'home', component: HomeComponent },
+  { path: 'login', component: LoginComponent },
+  { path: 'authors', component: AuthorsComponent, canActivate: [authGuard] },
+  { path: 'books', component: BooksComponent, canActivate: [authGuard] },
+  { path: '**', redirectTo: '/home' }
+];
+```
+
+```sh
+ng generate service services/auth --skip-tests
+ng generate guard guards/auth --skip-tests
+```
+
+### Models
+
+**auth.model.ts**
+
+```ts
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user?: any;
+}
+
+export interface User {
+  id: number;
+  email: string;
+}
+```
+
+### Services
+
+**auth.service.ts**
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, BehaviorSubject } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { LoginRequest, RegisterRequest, AuthResponse } from '../models/auth.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+  private apiUrl = 'http://localhost:5230/api/auth';
+  private tokenKey = 'auth_token';
+  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasToken());
+
+  constructor(private http: HttpClient) { }
+
+  get isAuthenticated(): Observable<boolean> {
+    return this.isAuthenticatedSubject.asObservable();
+  }
+
+  login(credentials: LoginRequest): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, credentials)
+      .pipe(
+        tap(response => {
+          if (response.token) {
+            localStorage.setItem(this.tokenKey, response.token);
+            this.isAuthenticatedSubject.next(true);
+          }
+        })
+      );
+  }
+
+  register(userData: RegisterRequest): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, userData);
+  }
+
+  logout(): void {
+    localStorage.removeItem(this.tokenKey);
+    this.isAuthenticatedSubject.next(false);
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem(this.tokenKey);
+  }
+
+  private hasToken(): boolean {
+    return !!this.getToken();
+  }
+
+  isLoggedIn(): boolean {
+    return this.hasToken();
+  }
+}
+```
+
+**auth.guard.ts**
+
+```ts
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+export const authGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isLoggedIn()) {
+    return true;
+  } else {
+    router.navigate(['/login']);
+    return false;
+  }
+};
+```
+
+### Navbar
+
+**navbar.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule, Router } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
+
+@Component({
+  selector: 'app-navbar',
+  standalone: true,
+  imports: [CommonModule, RouterModule],
+  templateUrl: './navbar.component.html',
+  styleUrl: './navbar.component.scss'
+})
+export class NavbarComponent {
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
+
+  isLoggedIn(): boolean {
+    return this.authService.isLoggedIn();
+  }
+
+  logout(): void {
+    this.authService.logout();
+    this.router.navigate(['/']);
+  }
+}
+```
+
+**navbar.component.html**
+
+```html
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" routerLink="/">Kozy Library</a>
+    
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Home</a>
+        </li>
+        @if (isLoggedIn()) {
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/authors" routerLinkActive="active">Authors</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/books" routerLinkActive="active">Books</a>
+          </li>
+        }
+      </ul>
+      
+      <ul class="navbar-nav">
+        @if (isLoggedIn()) {
+          <li class="nav-item">
+            <button class="btn btn-outline-light" (click)="logout()">Logout</button>
+          </li>
+        } @else {
+          <li class="nav-item">
+            <a class="btn btn-outline-light" routerLink="/login">Login</a>
+          </li>
+        }
+      </ul>
+    </div>
+  </div>
+</nav>
+```
+
+### App Component
+
+**app.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { NavbarComponent } from './components/navbar/navbar.component';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, NavbarComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.scss'
+})
+export class AppComponent {
+
+}
+```
+
+**app.component.html**
+
+```html
+<app-navbar></app-navbar>
+<router-outlet />
+```
+
+app.config.ts
+
+```ts
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }), 
+    provideRouter(routes),
+    provideHttpClient()
+  ]
+};
+```
+
+### Login
+
+**login.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
+import { LoginRequest } from '../../models/auth.model';
+
+@Component({
+  selector: 'app-login',
+  imports: [CommonModule, FormsModule],
+  templateUrl: './login.component.html',
+  styleUrl: './login.component.scss'
+})
+export class LoginComponent {
+  credentials: LoginRequest = {
+    email: '',
+    password: ''
+  };
+  
+  errorMessage: string = '';
+  isLoading: boolean = false;
+
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
+
+  onSubmit(): void {
+    if (this.credentials.email && this.credentials.password) {
+      this.isLoading = true;
+      this.errorMessage = '';
+      
+      this.authService.login(this.credentials).subscribe({
+        next: (response) => {
+          this.isLoading = false;
+          this.router.navigate(['/']);
+        },
+        error: (error) => {
+          this.isLoading = false;
+          this.errorMessage = error.error?.message || 'Login failed. Please try again.';
+        }
+      });
+    }
+  }
+}
+```
+
+**login.component.html**
+
+```html
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+      <div class="card shadow">
+        <div class="card-body">
+          <h3 class="card-title text-center mb-4">Login</h3>
+          
+          @if (errorMessage) {
+            <div class="alert alert-danger" role="alert">
+              {{ errorMessage }}
+            </div>
+          }
+          
+          <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
+            <div class="mb-3">
+              <label for="email" class="form-label">Email</label>
+              <input 
+                type="email" 
+                class="form-control" 
+                id="email" 
+                name="email"
+                [(ngModel)]="credentials.email" 
+                required 
+                email
+                #email="ngModel">
+              @if (email.invalid && (email.dirty || email.touched)) {
+                <div class="text-danger mt-1">
+                  @if (email.errors?.['required']) {
+                    Email is required
+                  }
+                  @if (email.errors?.['email']) {
+                    Please enter a valid email
+                  }
+                </div>
+              }
+            </div>
+            
+            <div class="mb-3">
+              <label for="password" class="form-label">Password</label>
+              <input 
+                type="password" 
+                class="form-control" 
+                id="password" 
+                name="password"
+                [(ngModel)]="credentials.password" 
+                required
+                minlength="6"
+                #password="ngModel">
+              @if (password.invalid && (password.dirty || password.touched)) {
+                <div class="text-danger mt-1">
+                  @if (password.errors?.['required']) {
+                    Password is required
+                  }
+                  @if (password.errors?.['minlength']) {
+                    Password must be at least 6 characters
+                  }
+                </div>
+              }
+            </div>
+            
+            <div class="d-grid">
+              <button 
+                type="submit" 
+                class="btn btn-primary"
+                [disabled]="loginForm.invalid || isLoading">
+                @if (isLoading) {
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Logging in...
+                } @else {
+                  Login
+                }
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 ```
 
 
 
+**home.component.ts**
 
+```ts
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
 
+@Component({
+  selector: 'app-home',
+  imports: [CommonModule, RouterModule],
+  templateUrl: './home.component.html',
+  styleUrl: './home.component.scss'
+})
+export class HomeComponent {
+  constructor(private authService: AuthService) {}
 
-
+  isLoggedIn(): boolean {
+    return this.authService.isLoggedIn();
+  }
+}
+```
 
 
 
