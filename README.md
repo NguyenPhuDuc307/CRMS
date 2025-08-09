@@ -60,10 +60,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.")));
-
-builder.Services.AddIdentityCore<ApplicationUser>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
 ```
 
 **Migrate**
@@ -358,6 +354,12 @@ Content-Type: application/json
 ## Swagger
 
 **Program.cs**
+
+```cs
+builder.Services.AddIdentityCore<ApplicationUser>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+```
 
 ```cs
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
