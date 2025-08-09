@@ -1748,7 +1748,7 @@ ng generate component pages/authors --skip-tests
 ng generate component pages/books --skip-tests
 ```
 
-**app.routes.ts**
+**src/app/app.routes.ts**
 
 ```ts
 export const routes: Routes = [
@@ -1768,7 +1768,7 @@ ng generate guard guards/auth --skip-tests
 
 ### Models
 
-**auth.model.ts**
+**src/app/models/auth.model.ts**
 
 ```ts
 export interface LoginRequest {
@@ -1794,7 +1794,7 @@ export interface User {
 
 ### Services
 
-**auth.service.ts**
+**src/app/services/author.service.ts**
 
 ```ts
 import { Injectable } from '@angular/core';
@@ -1852,7 +1852,7 @@ export class AuthService {
 }
 ```
 
-**auth.guard.ts**
+**src/app/guards/auth.guard.ts**
 
 ```ts
 import { inject } from '@angular/core';
@@ -1874,7 +1874,7 @@ export const authGuard: CanActivateFn = (route, state) => {
 
 ### Navbar
 
-**navbar.component.ts**
+**src/app/components/navbar/navbar.component.ts**
 
 ```ts
 import { Component } from '@angular/core';
@@ -1906,19 +1906,17 @@ export class NavbarComponent {
 }
 ```
 
-**navbar.component.html**
+**src/app/components/navbar/navbar.component.html**
 
 ```html
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-  <div class="container">
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
     <a class="navbar-brand" routerLink="/">Kozy Library</a>
-    
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
-    
     <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav me-auto">
+      <ul class="navbar-nav">
         <li class="nav-item">
           <a class="nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Home</a>
         </li>
@@ -1929,17 +1927,12 @@ export class NavbarComponent {
           <li class="nav-item">
             <a class="nav-link" routerLink="/books" routerLinkActive="active">Books</a>
           </li>
-        }
-      </ul>
-      
-      <ul class="navbar-nav">
-        @if (isLoggedIn()) {
           <li class="nav-item">
-            <button class="btn btn-outline-light" (click)="logout()">Logout</button>
+            <button class="nav-link btn" (click)="logout()">Logout</button>
           </li>
         } @else {
           <li class="nav-item">
-            <a class="btn btn-outline-light" routerLink="/login">Login</a>
+            <a class="nav-link" routerLink="/login">Login</a>
           </li>
         }
       </ul>
@@ -1950,7 +1943,7 @@ export class NavbarComponent {
 
 ### App Component
 
-**app.component.ts**
+**src/app/app.component.ts**
 
 ```ts
 import { Component } from '@angular/core';
@@ -1968,7 +1961,7 @@ export class AppComponent {
 }
 ```
 
-**app.component.html**
+**src/app/app.component.html**
 
 ```html
 <app-navbar></app-navbar>
@@ -1995,7 +1988,7 @@ export const appConfig: ApplicationConfig = {
 
 ### Login
 
-**login.component.ts**
+**src/app/pages/login/login.component.ts**
 
 ```ts
 import { Component } from '@angular/core';
@@ -2045,7 +2038,7 @@ export class LoginComponent {
 }
 ```
 
-**login.component.html**
+**src/app/pages/login/login.component.html**
 
 ```html
 <div class="container mt-5">
@@ -2129,7 +2122,7 @@ export class LoginComponent {
 </div>
 ```
 
-**home.component.ts**
+**src/app/pages/home/home.component.ts**
 
 ```ts
 import { Component } from '@angular/core';
@@ -2171,7 +2164,7 @@ export const environment = {
 ```ts
 export const environment = {
   production: true,
-  apiUrl: 'http://localhost:5230/api'
+  apiUrl: 'http://localhost:8080/api'
 };
 ```
 
