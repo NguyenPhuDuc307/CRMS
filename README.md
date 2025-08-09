@@ -619,7 +619,7 @@ public class Book
     public int Id { get; set; }
     public string? Title { get; set; }
     public string? Genre { get; set; }
-    public int PublicationYear { get; set; }
+    public int PublishedYear { get; set; }
     public string? Synopsis { get; set; }
     public int AuthorId { get; set; }
     public Author? Author { get; set; } // Navigation property to Author
@@ -1748,7 +1748,6 @@ ng generate component pages/authors --skip-tests
 ng generate component pages/books --skip-tests
 ```
 
-
 **app.routes.ts**
 
 ```ts
@@ -2130,8 +2129,6 @@ export class LoginComponent {
 </div>
 ```
 
-
-
 **home.component.ts**
 
 ```ts
@@ -2154,6 +2151,551 @@ export class HomeComponent {
   }
 }
 ```
+
+## CRUDS
+
+### Generate Environment Files
+
+**src/environments/environment.ts**
+
+```ts
+export const environment = {
+  production: false,
+  apiUrl: 'http://localhost:5230/api'
+};
+```
+
+
+**src/environments/environment.prod.ts**
+
+```ts
+export const environment = {
+  production: true,
+  apiUrl: 'http://localhost:5230/api'
+};
+```
+
+### Models
+
+**src/app/models/book.model.ts**
+
+```ts
+export interface Author {
+  id: number;
+  name: string;
+  birthYear: number;
+  nationality: string;
+  biography: string;
+}
+
+export interface Book {
+  id: number;
+  title: string;
+  authorId: number;
+  publishedYear: number;
+  genre: string;
+  summary: string;
+  author?: Author;
+}
+```
+
+```sh
+ng generate service services/author --skip-tests
+ng generate service services/book --skip-tests
+```
+
+**src/app/services/author.service.ts**
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { Author } from '../models/book.model';
+import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthorService {
+  private apiUrl = `${environment.apiUrl}/authors`;
+
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService
+  ) {}
+
+  private getHeaders(): HttpHeaders {
+    const token = this.authService.getToken();
+    return new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
+  }
+
+  getAuthors(query?: string): Observable<Author[]> {
+    const url = query ? `${this.apiUrl}?q=${query}` : this.apiUrl;
+    return this.http.get<Author[]>(url, { headers: this.getHeaders() });
+  }
+
+  getAuthor(id: number): Observable<Author> {
+    return this.http.get<Author>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
+  }
+
+  createAuthor(author: Omit<Author, 'id'>): Observable<Author> {
+    return this.http.post<Author>(this.apiUrl, author, { headers: this.getHeaders() });
+  }
+
+  updateAuthor(id: number, author: Omit<Author, 'id'>): Observable<Author> {
+    return this.http.put<Author>(`${this.apiUrl}/${id}`, author, { headers: this.getHeaders() });
+  }
+
+  deleteAuthor(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
+  }
+}
+
+```
+
+**src/app/services/book.service.ts**
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { Book } from '../models/book.model';
+import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class BookService {
+  private apiUrl = `${environment.apiUrl}/books`;
+
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService
+  ) {}
+
+  private getHeaders(): HttpHeaders {
+    const token = this.authService.getToken();
+    return new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
+  }
+
+  getBooks(query?: string): Observable<Book[]> {
+    const url = query ? `${this.apiUrl}?q=${query}` : this.apiUrl;
+    return this.http.get<Book[]>(url, { headers: this.getHeaders() });
+  }
+
+  getBook(id: number): Observable<Book> {
+    return this.http.get<Book>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
+  }
+
+  createBook(book: Omit<Book, 'id'>): Observable<Book> {
+    return this.http.post<Book>(this.apiUrl, book, { headers: this.getHeaders() });
+  }
+
+  updateBook(id: number, book: Omit<Book, 'id'>): Observable<Book> {
+    return this.http.put<Book>(`${this.apiUrl}/${id}`, book, { headers: this.getHeaders() });
+  }
+
+  deleteBook(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
+  }
+}
+```
+
+**src/app/pages/authors/authors.component.ts**
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Author } from '../../models/book.model';
+import { AuthorService } from '../../services/author.service';
+
+@Component({
+  selector: 'app-authors',
+  imports: [CommonModule, FormsModule],
+  templateUrl: './authors.component.html',
+  styleUrl: './authors.component.scss'
+})
+export class AuthorsComponent implements OnInit {
+  authors: Author[] = [];
+  searchQuery = '';
+  showModal = false;
+  editingAuthor: Author | null = null;
+  authorData = { name: '', birthYear: 2024, nationality: '', biography: '' };
+  errorMessage = '';
+
+  constructor(private authorService: AuthorService) {}
+
+  ngOnInit(): void {
+    this.loadAuthors();
+  }
+
+  loadAuthors(): void {
+    this.authorService.getAuthors().subscribe({
+      next: authors => this.authors = authors,
+      error: () => this.errorMessage = 'Failed to load authors'
+    });
+  }
+
+  searchAuthors(): void {
+    const query = this.searchQuery.trim() || undefined;
+    this.authorService.getAuthors(query).subscribe({
+      next: authors => this.authors = authors,
+      error: () => this.errorMessage = 'Search failed'
+    });
+  }
+
+  openCreateModal(): void {
+    this.editingAuthor = null;
+    this.authorData = { name: '', birthYear: 2024, nationality: '', biography: '' };
+    this.errorMessage = '';
+    this.showModal = true;
+  }
+
+  editAuthor(author: Author): void {
+    this.editingAuthor = author;
+    this.authorData = { ...author };
+    this.errorMessage = '';
+    this.showModal = true;
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+  }
+
+  saveAuthor(): void {
+    this.errorMessage = '';
+    const payload = this.editingAuthor ? { id: this.editingAuthor.id, ...this.authorData } : this.authorData;
+    const operation = this.editingAuthor 
+      ? this.authorService.updateAuthor(this.editingAuthor.id, payload)
+      : this.authorService.createAuthor(payload);
+    
+    operation.subscribe({
+      next: () => {
+        this.closeModal();
+        this.loadAuthors();
+      },
+      error: () => this.errorMessage = 'Save failed'
+    });
+  }
+
+  deleteAuthor(id: number, name: string): void {
+    if (confirm(`Delete "${name}"?`)) {
+      this.authorService.deleteAuthor(id).subscribe({
+        next: () => this.loadAuthors(),
+        error: () => this.errorMessage = 'Delete failed'
+      });
+    }
+  }
+}
+```
+
+```html
+<div class="container mt-4">
+  <div class="d-flex justify-content-between mb-4">
+    <h2>Authors</h2>
+    <button class="btn btn-primary" (click)="openCreateModal()">Add Author</button>
+  </div>
+  
+  @if (errorMessage) {
+    <div class="alert alert-danger">{{ errorMessage }}</div>
+  }
+  
+  <div class="row mb-3">
+    <div class="col-6">
+      <input type="text" class="form-control" placeholder="Search..." [(ngModel)]="searchQuery" (keyup.enter)="searchAuthors()">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-secondary" (click)="searchAuthors()">Search</button>
+    </div>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Birth Year</th>
+        <th>Nationality</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (author of authors; track author.id) {
+        <tr>
+          <td>{{ author.name }}</td>
+          <td>{{ author.birthYear }}</td>
+          <td>{{ author.nationality }}</td>
+          <td>
+            <button class="btn btn-sm btn-primary me-1" (click)="editAuthor(author)">Edit</button>
+            <button class="btn btn-sm btn-danger" (click)="deleteAuthor(author.id, author.name)">Delete</button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (showModal) {
+  <div class="modal show d-block">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>{{ editingAuthor ? 'Edit Author' : 'Add Author' }}</h5>
+          <button type="button" class="btn-close" (click)="closeModal()"></button>
+        </div>
+        <form (ngSubmit)="saveAuthor()">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input type="text" class="form-control" [(ngModel)]="authorData.name" name="name" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Birth Year</label>
+              <input type="number" class="form-control" [(ngModel)]="authorData.birthYear" name="birthYear" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Nationality</label>
+              <input type="text" class="form-control" [(ngModel)]="authorData.nationality" name="nationality" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Biography</label>
+              <textarea class="form-control" [(ngModel)]="authorData.biography" name="biography" rows="3" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">{{ editingAuthor ? 'Update' : 'Create' }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}
+```
+
+**src/app/pages/books/books.component.ts**
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Book, Author } from '../../models/book.model';
+import { BookService } from '../../services/book.service';
+import { AuthorService } from '../../services/author.service';
+import { forkJoin } from 'rxjs';
+
+@Component({
+  selector: 'app-books',
+  imports: [CommonModule, FormsModule],
+  templateUrl: './books.component.html',
+  styleUrl: './books.component.scss'
+})
+export class BooksComponent implements OnInit {
+  books: Book[] = [];
+  authors: Author[] = [];
+  errorMessage = '';
+  searchQuery = '';
+  showModal = false;
+  editingBook: Book | null = null;
+  bookData = { title: '', authorId: 0, publishedYear: 2024, genre: '', synopsis: '' };
+
+  constructor(
+    private bookService: BookService,
+    private authorService: AuthorService
+  ) { }
+
+  ngOnInit(): void {
+    this.loadData();
+  }
+
+  loadData(): void {
+    this.errorMessage = '';
+    forkJoin({
+      books: this.bookService.getBooks(),
+      authors: this.authorService.getAuthors()
+    }).subscribe({
+      next: ({ books, authors }) => {
+        this.authors = authors;
+        this.books = books;
+      },
+      error: () => this.errorMessage = 'Failed to load data'
+    });
+  }
+
+  getAuthorName(authorId: number): string {
+    const author = this.authors.find(a => a.id === authorId);
+    return author?.name || 'Unknown';
+  }
+
+  searchBooks(): void {
+    const query = this.searchQuery.trim() || undefined;
+    this.bookService.getBooks(query).subscribe({
+      next: books => this.books = books,
+      error: () => this.errorMessage = 'Search failed'
+    });
+  }
+
+  openCreateModal(): void {
+    this.editingBook = null;
+    this.bookData = { title: '', authorId: 0, publishedYear: 2024, genre: '', synopsis: '' };
+    this.errorMessage = '';
+    this.showModal = true;
+  }
+
+  editBook(book: Book): void {
+    this.editingBook = book;
+    this.bookData = { ...book };
+    this.errorMessage = '';
+    this.showModal = true;
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+  }
+
+  saveBook(): void {
+    this.errorMessage = '';
+    const payload = this.editingBook ? { id: this.editingBook.id, ...this.bookData } : this.bookData;
+    const operation = this.editingBook
+      ? this.bookService.updateBook(this.editingBook.id, payload)
+      : this.bookService.createBook(payload);
+
+    operation.subscribe({
+      next: () => {
+        this.closeModal();
+        this.loadData();
+      },
+      error: () => this.errorMessage = 'Save failed'
+    });
+  }
+
+  deleteBook(id: number, title: string): void {
+    if (confirm(`Delete "${title}"?`)) {
+      this.bookService.deleteBook(id).subscribe({
+        next: () => this.loadData(),
+        error: () => this.errorMessage = 'Delete failed'
+      });
+    }
+  }
+}
+```
+
+```html
+<div class="container mt-4">
+  <div class="d-flex justify-content-between mb-4">
+    <h2>Books</h2>
+    <button class="btn btn-primary" (click)="openCreateModal()">Add Book</button>
+  </div>
+
+  @if (errorMessage) {
+    <div class="alert alert-danger">{{ errorMessage }}</div>
+  }
+
+  <div class="row mb-3">
+    <div class="col-6">
+      <input type="text" class="form-control" placeholder="Search..." [(ngModel)]="searchQuery" (keyup.enter)="searchBooks()">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-secondary" (click)="searchBooks()">Search</button>
+    </div>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Author</th>
+        <th>Year</th>
+        <th>Genre</th>
+        <th>Synopsis</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (book of books; track book.id) {
+        <tr>
+          <td>{{ book.title }}</td>
+          <td>{{ getAuthorName(book.authorId) }}</td>
+          <td>{{ book.publishedYear }}</td>
+          <td>{{ book.genre }}</td>
+          <td>{{ book.synopsis }}</td>
+          <td>
+            <button class="btn btn-sm btn-primary me-1" (click)="editBook(book)">Edit</button>
+            <button class="btn btn-sm btn-danger" (click)="deleteBook(book.id, book.title)">Delete</button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (showModal) {
+  <div class="modal show d-block">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>{{ editingBook ? 'Edit Book' : 'Add Book' }}</h5>
+          <button type="button" class="btn-close" (click)="closeModal()"></button>
+        </div>
+        <form (ngSubmit)="saveBook()">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Title</label>
+              <input type="text" class="form-control" [(ngModel)]="bookData.title" name="title" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Author</label>
+              <select class="form-select" [(ngModel)]="bookData.authorId" name="authorId" required>
+                <option value="">Select author</option>
+                @for (author of authors; track author.id) {
+                  <option [value]="author.id">{{ author.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Year</label>
+              <input type="number" class="form-control" [(ngModel)]="bookData.publishedYear" name="year" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Genre</label>
+              <input type="text" class="form-control" [(ngModel)]="bookData.genre" name="genre" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Synopsis</label>
+              <textarea class="form-control" [(ngModel)]="bookData.synopsis" name="synopsis" rows="3" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">{{ editingBook ? 'Update' : 'Create' }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}
+```
+
+
+
+
+
+
+
+
+
+
+
 
 
 
