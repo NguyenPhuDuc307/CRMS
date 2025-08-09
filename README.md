@@ -2686,19 +2686,58 @@ export class BooksComponent implements OnInit {
 }
 ```
 
+## Docker
 
+**Dockerfile**
 
+```Dockerfile
+# Dockerfile for kozy-client (Angular)
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build -- --configuration=production --output-path=dist/kozy-client
+RUN ls -l dist/kozy-client
 
+FROM nginx:alpine
+COPY --from=build /app/dist/kozy-client/browser /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
 
+**.dockerignore**
 
+```dockerignore
+node_modules
+npm-debug.log
+dist
+.git
+.gitignore
+README.md
+.env
+.nyc_output
+coverage
+.coverage
+.coverage.*
+*.log
+.DS_Store
+Thumbs.db
+```
 
+**docker-compose.yml**
 
+```yml
+services:
+  kozy-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+    - NODE_ENV=production
+    container_name: kozy-client
+    restart: unless-stopped
 
-
-
-
-
-
-
-
-
+```
