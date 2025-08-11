@@ -79,8 +79,8 @@ dotnet ef database update
 ```json
 "Jwt": {
   "Key": "YourSuperSecretKeyThatShouldBeAtLeast256BitsLong!",
-  "Issuer": "PionAPI",
-  "Audience": "PionAPI",
+  "Issuer": "KozyAPI",
+  "Audience": "KozyAPI",
   "ExpireMinutes": "60"
 }
 ```
