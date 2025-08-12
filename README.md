@@ -739,7 +739,7 @@ Authorization: Bearer {{token}}
   "authorId": {{authorId}},
   "publishedYear": 2020,
   "genre": "Fiction",
-  "summary": "This is a new book."
+  "synopsis": "This is a new book."
 }
 
 ### 3.4 Update Book
@@ -752,7 +752,7 @@ Authorization: Bearer {{token}}
   "authorId": {{authorId}},
   "publishedYear": 2021,
   "genre": "Non-Fiction",
-  "summary": "This is an updated book."
+  "synopsis": "This is an updated book."
 }
 
 ### 3.5 Delete Book
