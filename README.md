@@ -1736,6 +1736,8 @@ ng generate component components/navbar
 ng generate component pages/login --skip-tests
 ng generate component pages/authors --skip-tests
 ng generate component pages/books --skip-tests
+ng generate component pages/authors/author-detail --skip-tests
+ng generate component pages/books/book-detail --skip-tests
 ```
 
 **src/app/app.routes.ts**
@@ -1746,7 +1748,9 @@ export const routes: Routes = [
   { path: 'home', component: HomeComponent },
   { path: 'login', component: LoginComponent },
   { path: 'authors', component: AuthorsComponent, canActivate: [authGuard] },
+  { path: 'authors/:id', component: AuthorDetailComponent, canActivate: [authGuard] },
   { path: 'books', component: BooksComponent, canActivate: [authGuard] },
+  { path: 'books/:id', component: BookDetailComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '/home' }
 ];
 ```
@@ -2278,6 +2282,10 @@ export class BookService {
     return this.http.get<Book>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
   }
 
+  getBooksByAuthor(authorId: number): Observable<Book[]> {
+    return this.http.get<Book[]>(`${this.apiUrl}?authorId=${authorId}`, { headers: this.getHeaders() });
+  }
+
   createBook(book: Omit<Book, 'id'>): Observable<Book> {
     return this.http.post<Book>(this.apiUrl, book, { headers: this.getHeaders() });
   }
@@ -2298,12 +2306,13 @@ export class BookService {
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { Author } from '../../models/book.model';
 import { AuthorService } from '../../services/author.service';
 
 @Component({
   selector: 'app-authors',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './authors.component.html',
   styleUrl: './authors.component.scss'
 })
@@ -2413,10 +2422,15 @@ export class AuthorsComponent implements OnInit {
     <tbody>
       @for (author of authors; track author.id) {
         <tr>
-          <td>{{ author.name }}</td>
+          <td>
+            <a [routerLink]="['/authors', author.id]" class="text-decoration-none">
+              {{ author.name }}
+            </a>
+          </td>
           <td>{{ author.birthYear }}</td>
           <td>{{ author.nationality }}</td>
           <td>
+            <button class="btn btn-sm btn-info me-1" [routerLink]="['/authors', author.id]">View</button>
             <button class="btn btn-sm btn-primary me-1" (click)="editAuthor(author)">Edit</button>
             <button class="btn btn-sm btn-danger" (click)="deleteAuthor(author.id, author.name)">Delete</button>
           </td>
@@ -2471,6 +2485,7 @@ export class AuthorsComponent implements OnInit {
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { Book, Author } from '../../models/book.model';
 import { BookService } from '../../services/book.service';
 import { AuthorService } from '../../services/author.service';
@@ -2478,7 +2493,7 @@ import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-books',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './books.component.html',
   styleUrl: './books.component.scss'
 })
@@ -2606,12 +2621,17 @@ export class BooksComponent implements OnInit {
     <tbody>
       @for (book of books; track book.id) {
         <tr>
-          <td>{{ book.title }}</td>
+          <td>
+            <a [routerLink]="['/books', book.id]" class="text-decoration-none">
+              {{ book.title }}
+            </a>
+          </td>
           <td>{{ getAuthorName(book.authorId) }}</td>
           <td>{{ book.publishedYear }}</td>
           <td>{{ book.genre }}</td>
           <td>{{ book.synopsis }}</td>
           <td>
+            <button class="btn btn-sm btn-info me-1" [routerLink]="['/books', book.id]">View</button>
             <button class="btn btn-sm btn-primary me-1" (click)="editBook(book)">Edit</button>
             <button class="btn btn-sm btn-danger" (click)="deleteBook(book.id, book.title)">Delete</button>
           </td>
@@ -2667,6 +2687,236 @@ export class BooksComponent implements OnInit {
   </div>
   <div class="modal-backdrop show"></div>
 }
+```
+
+**src/app/pages/authors/author-detail/author-detail.component.ts**
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { Author, Book } from '../../../models/book.model';
+import { AuthorService } from '../../../services/author.service';
+import { BookService } from '../../../services/book.service';
+
+@Component({
+  selector: 'app-author-detail',
+  imports: [CommonModule, RouterModule],
+  templateUrl: './author-detail.component.html',
+  styleUrl: './author-detail.component.scss'
+})
+export class AuthorDetailComponent implements OnInit {
+  author: Author | null = null;
+  authorBooks: Book[] = [];
+  errorMessage = '';
+
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private authorService: AuthorService,
+    private bookService: BookService
+  ) {}
+
+  ngOnInit(): void {
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    if (id) {
+      this.loadAuthorDetails(id);
+    } else {
+      this.errorMessage = 'Invalid author ID';
+    }
+  }
+
+  loadAuthorDetails(id: number): void {
+    this.authorService.getAuthor(id).subscribe({
+      next: (author) => {
+        this.author = author;
+      },
+      error: () => {
+        this.errorMessage = 'Failed to load author details';
+      }
+    });
+  }
+
+  goBack(): void {
+    this.router.navigate(['/authors']);
+  }
+}
+```
+
+**src/app/pages/books/book-detail/book-detail.component.ts**
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { Book, Author } from '../../../models/book.model';
+import { BookService } from '../../../services/book.service';
+import { AuthorService } from '../../../services/author.service';
+
+@Component({
+  selector: 'app-book-detail',
+  imports: [CommonModule, RouterModule],
+  templateUrl: './book-detail.component.html',
+  styleUrl: './book-detail.component.scss'
+})
+export class BookDetailComponent implements OnInit {
+  book: Book | null = null;
+  author: Author | null = null;
+  errorMessage = '';
+
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private bookService: BookService,
+    private authorService: AuthorService
+  ) {}
+
+  ngOnInit(): void {
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    if (id) {
+      this.loadBookDetails(id);
+    } else {
+      this.errorMessage = 'Invalid book ID';
+    }
+  }
+
+  loadBookDetails(id: number): void {
+    this.bookService.getBook(id).subscribe({
+      next: (book) => {
+        this.book = book;
+        this.loadAuthorDetails(book.authorId);
+      },
+      error: () => {
+        this.errorMessage = 'Failed to load book details';
+      }
+    });
+  }
+
+  loadAuthorDetails(authorId: number): void {
+    this.authorService.getAuthor(authorId).subscribe({
+      next: (author) => {
+        this.author = author;
+      },
+      error: () => {
+        // Silent fail for author details
+      }
+    });
+  }
+
+  goBack(): void {
+    this.router.navigate(['/books']);
+  }
+
+  goToAuthor(authorId: number): void {
+    this.router.navigate(['/authors', authorId]);
+  }
+}
+```
+
+**src/app/pages/authors/author-detail/author-detail.component.html**
+
+```html
+<div class="author-detail-container">
+  <!-- Error State -->
+  <div *ngIf="errorMessage" class="error">
+    <p>{{ errorMessage }}</p>
+    <button class="btn btn-secondary" (click)="goBack()">Back to Authors</button>
+  </div>
+
+  <!-- Author Details -->
+  <div *ngIf="author" class="author-details">
+    <!-- Header -->
+    <div class="author-header">
+      <button class="btn btn-secondary back-btn" (click)="goBack()">
+        ← Back to Authors
+      </button>
+      <h1>{{ author.name }}</h1>
+    </div>
+
+    <!-- Author Information -->
+    <div class="author-info">
+      <div class="info-card">
+        <h2>Author Information</h2>
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Name:</label>
+            <span>{{ author.name }}</span>
+          </div>
+          <div class="info-item">
+            <label>Birth Year:</label>
+            <span>{{ author.birthYear }}</span>
+          </div>
+          <div class="info-item">
+            <label>Nationality:</label>
+            <span>{{ author.nationality }}</span>
+          </div>
+        </div>
+        <div class="biography" *ngIf="author.biography">
+          <label>Biography:</label>
+          <p>{{ author.biography }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**src/app/pages/books/book-detail/book-detail.component.html**
+
+```html
+<div class="book-detail-container">
+  <!-- Error State -->
+  <div *ngIf="errorMessage" class="error">
+    <p>{{ errorMessage }}</p>
+    <button class="btn btn-secondary" (click)="goBack()">Back to Books</button>
+  </div>
+
+  <!-- Book Details -->
+  <div *ngIf="book" class="book-details">
+    <!-- Header -->
+    <div class="book-header">
+      <button class="btn btn-secondary back-btn" (click)="goBack()">
+        ← Back to Books
+      </button>
+      <h1>{{ book.title }}</h1>
+    </div>
+
+    <!-- Main Content -->
+    <div class="book-content">
+      <!-- Book Information -->
+      <div class="book-info">
+        <div class="info-card">
+          <h2>Book Information</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Title:</label>
+              <span>{{ book.title }}</span>
+            </div>
+            <div class="info-item">
+              <label>Published Year:</label>
+              <span>{{ book.publishedYear }}</span>
+            </div>
+            <div class="info-item">
+              <label>Genre:</label>
+              <span>{{ book.genre }}</span>
+            </div>
+            <div class="info-item">
+              <label>Author:</label>
+              <span *ngIf="author" class="author-link" (click)="goToAuthor(author.id)">
+                {{ author.name }}
+              </span>
+              <span *ngIf="!author">Loading author...</span>
+            </div>
+          </div>
+          <div class="synopsis" *ngIf="book.synopsis">
+            <label>Synopsis:</label>
+            <p>{{ book.synopsis }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 ```
 
 ## Docker
