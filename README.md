@@ -436,15 +436,6 @@ bin/
 obj/
 out/
 
-# Test results and coverage
-TestResults/
-CoverageReport/
-*.coverage
-*.coveragexml
-
-# SonarQube files
-.sonarqube/
-
 # Development files
 *.Development.json
 appsettings.Development.json
