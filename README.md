@@ -141,9 +141,6 @@ public class JwtService : IJwtService
 
     public string GenerateToken(string userId)
     {
-        if (string.IsNullOrEmpty(userId))
-            throw new ArgumentException("User ID cannot be null or empty.", nameof(userId));
-
         var keyBytes = Encoding.UTF8.GetBytes(_jwtSettings.Key);
 
         var tokenDescriptor = new SecurityTokenDescriptor
@@ -628,6 +625,13 @@ public class Book
 }
 ```
 
+**ApplicationDbContext.cs**
+
+```cs
+public DbSet<Author> Authors { get; set; }
+public DbSet<Book> Books { get; set; }
+```
+
 **Migrate**
 
 ```sh
@@ -636,13 +640,6 @@ dotnet ef migrations add AddAuthorEntityAndBookEntity
 
 ```sh
 dotnet ef database update
-```
-
-**ApplicationDbContext.cs**
-
-```cs
-public DbSet<Author> Authors { get; set; }
-public DbSet<Book> Books { get; set; }
 ```
 
 **Generate API Controllers**
