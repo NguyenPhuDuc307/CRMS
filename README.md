@@ -2974,3 +2974,105 @@ services:
     restart: unless-stopped
 
 ```
+
+# REACT APP
+
+### Init project
+
+```sh
+# tạo dự án react với vite
+npm create vite@latest kozy-client -- --template react-ts
+
+# vào thư mục dự án
+cd kozy-client
+
+# cài thêm thư viện cần thiết
+npm install bootstrap axios react-router-dom@6 zustand
+```
+
+```
+kozy-client/
+├── src/
+│   ├── api/               # gọi API
+│   │   ├── axiosClient.ts # cấu hình axios
+│   │   ├── authApi.ts     # API đăng ký, login
+│   │   ├── authorsApi.ts  # API tác giả
+│   │   └── booksApi.ts    # API sách
+│   │
+│   ├── store/             # state management (zustand)
+│   │   └── authStore.ts
+│   │
+│   ├── pages/             # các trang chính
+│   │   ├── Login.tsx
+│   │   ├── Register.tsx
+│   │   ├── Authors.tsx
+│   │   ├── AuthorDetail.tsx
+│   │   ├── Books.tsx
+│   │   └── BookDetail.tsx
+│   │
+│   ├── components/        # UI components dùng chung
+│   │   └── Navbar.tsx
+│   │
+│   ├── App.tsx
+│   └── main.tsx
+│
+├── index.html
+├── package.json
+└── tsconfig.json
+```
+
+**src/main.tsx**
+
+```tsx
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import './index.css'
+import App from './App.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+```
+
+**src/api/axiosClient.ts**
+
+**src/store/authStore.ts**
+
+**src/api/authApi.ts**
+
+**src/api/authorsApi.ts**
+
+**src/api/booksApi.ts**
+
+**src/App.tsx**
+
+**src/pages/Login.tsx**
+
+**src/pages/Authors.tsx**
+
+**src/pages/AuthorDetail.tsx**
+
+**src/pages/Books.tsx**
+
+**src/pages/BookDetail.tsx**
+
+**src/components/Navbar.tsx**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
